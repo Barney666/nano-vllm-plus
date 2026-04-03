@@ -197,3 +197,19 @@ python benchmark_chunked_effectiveness.py
 - `mixed_ratio` 明显上升；
 - `ttft_p95`、`finish_short_mean` 或 `finish_p95` 至少有一项改善；
 - 即便总吞吐不升，也能看到公平性/尾延迟指标改善。
+
+## 12. 简历导向的“公平性”量化测试
+
+如果你要突出“短请求不再被长请求饿死”，建议直接跑：
+
+```bash
+python benchmark_chunked_fairness.py
+```
+
+该脚本会模拟在线到达模式：先来长请求，再在多个 step 注入短请求，然后比较 baseline 与 chunked+continuous 的：
+
+- `short_ttft_p95`（短请求首 token 延迟）
+- `short_finish_p95`（短请求尾延迟）
+- `mixed_ratio`
+
+简历建议优先写这类指标，而不是只写总吞吐。
