@@ -47,11 +47,12 @@ def run_case(
 ):
     long_max_tokens = 128
     short_max_tokens = 16
+    max_model_len = len(long_prompt) + long_max_tokens if enable_chunked_prefill else len(long_prompt)
     llm = LLM(
         model_path,
         tensor_parallel_size=1,
         enforce_eager=False,
-        max_model_len=len(long_prompt) + long_max_tokens,
+        max_model_len=max_model_len,
         max_num_batched_tokens=len(long_prompt),
         enable_chunked_prefill=enable_chunked_prefill,
         chunked_prefill_size=chunked_prefill_size,
