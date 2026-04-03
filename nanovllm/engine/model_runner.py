@@ -223,7 +223,6 @@ class ModelRunner:
         max_seqlen_k = 0
         slot_mapping = []
         seqs = []
-        decode_query_idxs = []
 
         def append_segment(seq: Sequence, start: int, end: int):
             nonlocal max_seqlen_q, max_seqlen_k
@@ -249,7 +248,6 @@ class ModelRunner:
             end = len(seq)
             seqs.append(seq)
             append_segment(seq, start, end)
-            decode_query_idxs.append(cu_seqlens_q[-1] - 1)
 
         block_tables = self.prepare_block_tables(seqs)
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
@@ -257,16 +255,15 @@ class ModelRunner:
         cu_seqlens_q = torch.tensor(cu_seqlens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         cu_seqlens_k = torch.tensor(cu_seqlens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        decode_query_idxs = torch.tensor(decode_query_idxs, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         set_context(True, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, slot_mapping, None, block_tables)
-        return input_ids, positions, decode_query_idxs
+        return input_ids, positions, len(prefill_seqs)
 
     def run_mixed(self, decode_seqs: list[Sequence], prefill_seqs: list[Sequence], prefill_chunk_lens: list[int]) -> list[int]:
-        input_ids, positions, decode_query_idxs = self.prepare_mixed(decode_seqs, prefill_seqs, prefill_chunk_lens)
+        input_ids, positions, num_prefill_seqs = self.prepare_mixed(decode_seqs, prefill_seqs, prefill_chunk_lens)
         logits = self.run_model(input_ids, positions, True)
         if self.rank == 0 and decode_seqs:
             temperatures, top_ps = self.prepare_sample(decode_seqs)
-            decode_logits = logits[decode_query_idxs]
+            decode_logits = logits[num_prefill_seqs:num_prefill_seqs + len(decode_seqs)]
             token_ids = self.sampler(decode_logits, temperatures, top_ps).tolist()
         else:
             token_ids = [] if self.rank == 0 else None
