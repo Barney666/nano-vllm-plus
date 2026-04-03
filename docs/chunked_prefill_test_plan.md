@@ -144,3 +144,27 @@ python example.py
 - `Mixed ratio`
 - `Prefill tokens scheduled`
 - `Decode tokens scheduled`
+
+## 10. 如果“实现后更慢”是否正常
+
+结论：**有可能正常**，尤其在离线小批量场景。
+
+常见原因：
+
+- chunked prefill 把一次大 prefill 拆成了更多 step，会增加调度与 kernel launch 次数；
+- continuous batching 的价值更偏在线场景（降低长尾/提升并发体验），不一定在单次离线吞吐上占优；
+- 如果 `max_prefill_chunk_size` 太小、`max_num_batched_tokens` 太小，会进一步增加 step 数与管理开销。
+
+建议做“公平对比”时同时观察：
+
+- `Total inference time`
+- `Mixed ratio`
+- `Total steps`
+- `Prefill/Decode tokens scheduled`
+
+若你看到“实现后 60s，实现前 32s”，通常说明当前参数更偏 latency fairness 而非纯吞吐。可尝试逐步调大：
+
+- `max_prefill_chunk_size`（例如 32 -> 64 -> 128 -> 256）
+- `max_num_batched_tokens`（例如 128 -> 256 -> 512 -> 1024）
+
+再重新比较总耗时与 mixed ratio，找到你业务更合适的折中点。
