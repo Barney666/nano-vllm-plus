@@ -10,6 +10,7 @@ class Config:
     max_num_batched_tokens: int = 16384
     max_num_seqs: int = 512
     max_prefill_chunk_size: int = 512
+    enable_continuous_batching: bool = True
     # Maximum sequence length allowed by the engine (capped by model position embeddings).
     max_model_len: int = 4096
     gpu_memory_utilization: float = 0.9

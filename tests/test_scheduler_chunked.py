@@ -65,11 +65,12 @@ Sequence = sequence_mod.Sequence
 BlockManager = block_manager_mod.BlockManager
 
 
-def make_scheduler(max_num_batched_tokens=8, max_num_seqs=8, max_prefill_chunk_size=3):
+def make_scheduler(max_num_batched_tokens=8, max_num_seqs=8, max_prefill_chunk_size=3, enable_continuous_batching=True):
     cfg = SimpleNamespace(
         max_num_seqs=max_num_seqs,
         max_num_batched_tokens=max_num_batched_tokens,
         max_prefill_chunk_size=max_prefill_chunk_size,
+        enable_continuous_batching=enable_continuous_batching,
         eos=-1,
         num_kvcache_blocks=128,
         kvcache_block_size=256,
@@ -166,3 +167,16 @@ def test_continuous_batching_has_mixed_steps_in_rollout():
         scheduler.postprocess(prefill, chunks, decode, [0] * len(decode))
 
     assert mixed_steps > 0
+
+
+def test_disable_continuous_batching_never_mixes_in_same_step():
+    scheduler = make_scheduler(max_num_batched_tokens=6, max_prefill_chunk_size=2, enable_continuous_batching=False)
+    for _ in range(4):
+        scheduler.add(Sequence([1, 2, 3, 4, 5, 6]))
+
+    for _ in range(30):
+        if scheduler.is_finished():
+            break
+        decode, prefill, chunks = scheduler.schedule()
+        assert not (decode and prefill)
+        scheduler.postprocess(prefill, chunks, decode, [0] * len(decode))

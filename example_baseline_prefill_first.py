@@ -20,6 +20,7 @@ def main():
         tensor_parallel_size=1,
         max_prefill_chunk_size=4096,
         max_num_batched_tokens=4096,
+        enable_continuous_batching=False,
     )
 
     sampling_params = SamplingParams(

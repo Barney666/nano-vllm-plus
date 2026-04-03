@@ -136,11 +136,10 @@ python example.py
 仓库提供两个可直接运行的脚本，prompt 与 sampling 参数保持一致：
 
 - `python example.py`：chunked + continuous batching 配置（`max_prefill_chunk_size=32`, `max_num_batched_tokens=128`）
-- `python example_baseline_prefill_first.py`：近似 prefill-first 基线配置（`max_prefill_chunk_size=4096`, `max_num_batched_tokens=4096`）
+- `python example_baseline_prefill_first.py`：prefill-first 基线配置（`enable_continuous_batching=False`, `max_prefill_chunk_size=4096`, `max_num_batched_tokens=4096`）
 
-说明：`baseline_prefill_first_like` 是“行为近似”，不是“代码完全回到改造前版本”。
-它的含义是把 chunk 与预算放大，让调度在大多数 step 上更接近“先 prefill、后 decode”的形态；
-但底层仍运行当前代码（包含 mixed runner、统计逻辑等）。
+说明：`enable_continuous_batching=False` 是真正的功能开关，会禁用同 step 的 prefill+decode 混合调度；
+此时会退化为“prefill phase 与 decode phase 分离”的执行形态，更接近改造前行为。
 
 建议对比以下字段：
 

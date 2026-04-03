@@ -43,7 +43,7 @@ def build_arrival_events(tokenizer):
     return events
 
 
-def run_case(model_path: str, chunk_size: int, batched_tokens: int):
+def run_case(model_path: str, chunk_size: int, batched_tokens: int, enable_continuous_batching: bool):
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     events = build_arrival_events(tokenizer)
     sampling_params = SamplingParams(temperature=0.6, top_p=0.9, max_tokens=192, ignore_eos=True)
@@ -53,6 +53,7 @@ def run_case(model_path: str, chunk_size: int, batched_tokens: int):
         tensor_parallel_size=1,
         max_prefill_chunk_size=chunk_size,
         max_num_batched_tokens=batched_tokens,
+        enable_continuous_batching=enable_continuous_batching,
     )
 
     pending = list(events)
@@ -110,7 +111,7 @@ def run_case(model_path: str, chunk_size: int, batched_tokens: int):
     }
 
 
-def run_single_case_in_subprocess(model_path: str, chunk_size: int, batched_tokens: int) -> dict:
+def run_single_case_in_subprocess(model_path: str, chunk_size: int, batched_tokens: int, enable_continuous_batching: bool) -> dict:
     cmd = [
         sys.executable,
         __file__,
@@ -122,6 +123,8 @@ def run_single_case_in_subprocess(model_path: str, chunk_size: int, batched_toke
         str(chunk_size),
         "--batched-tokens",
         str(batched_tokens),
+        "--enable-continuous-batching",
+        "1" if enable_continuous_batching else "0",
     ]
     p = subprocess.run(cmd, check=True, capture_output=True, text=True)
     lines = [line.strip() for line in p.stdout.splitlines() if line.strip()]
@@ -144,15 +147,25 @@ def main():
     parser.add_argument("--model-path", default=os.path.expanduser("~/huggingface/Qwen3-0.6B/"))
     parser.add_argument("--chunk-size", type=int, default=32)
     parser.add_argument("--batched-tokens", type=int, default=128)
+    parser.add_argument("--enable-continuous-batching", type=int, choices=[0, 1], default=1)
     args = parser.parse_args()
 
     if args.mode == "single":
-        result = run_case(args.model_path, chunk_size=args.chunk_size, batched_tokens=args.batched_tokens)
+        result = run_case(
+            args.model_path,
+            chunk_size=args.chunk_size,
+            batched_tokens=args.batched_tokens,
+            enable_continuous_batching=bool(args.enable_continuous_batching),
+        )
         print(json.dumps(result, ensure_ascii=False))
         return
 
-    baseline = run_single_case_in_subprocess(args.model_path, chunk_size=4096, batched_tokens=4096)
-    optimized = run_single_case_in_subprocess(args.model_path, chunk_size=32, batched_tokens=128)
+    baseline = run_single_case_in_subprocess(
+        args.model_path, chunk_size=4096, batched_tokens=4096, enable_continuous_batching=False
+    )
+    optimized = run_single_case_in_subprocess(
+        args.model_path, chunk_size=32, batched_tokens=128, enable_continuous_batching=True
+    )
 
     print_result("baseline_prefill_first_like", baseline)
     print_result("chunked_continuous", optimized)

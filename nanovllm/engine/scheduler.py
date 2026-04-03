@@ -11,6 +11,7 @@ class Scheduler:
         self.max_num_seqs = config.max_num_seqs
         self.max_num_batched_tokens = config.max_num_batched_tokens
         self.max_prefill_chunk_size = config.max_prefill_chunk_size
+        self.enable_continuous_batching = getattr(config, "enable_continuous_batching", True)
         self.eos = config.eos
         self.block_manager = BlockManager(config.num_kvcache_blocks, config.kvcache_block_size)
         self.waiting: deque[Sequence] = deque()
@@ -23,6 +24,9 @@ class Scheduler:
         self.waiting.append(seq)
 
     def schedule(self) -> tuple[list[Sequence], list[Sequence], list[int]]:
+        if not self.enable_continuous_batching:
+            return self.schedule_no_continuous_batching()
+
         decode_seqs = []
         prefill_seqs = []
         prefill_chunk_lens = []
@@ -98,6 +102,60 @@ class Scheduler:
                 decode_seqs.append(seq)
                 break
         assert decode_seqs or prefill_seqs
+        return decode_seqs, prefill_seqs, prefill_chunk_lens
+
+    def schedule_no_continuous_batching(self) -> tuple[list[Sequence], list[Sequence], list[int]]:
+        decode_seqs = []
+        prefill_seqs = []
+        prefill_chunk_lens = []
+        scheduled_ids = set()
+        num_batched_tokens = 0
+
+        def schedule_prefill(seq: Sequence) -> bool:
+            nonlocal num_batched_tokens
+            if seq.seq_id in scheduled_ids or seq.is_prefill_finished:
+                return False
+            if len(scheduled_ids) >= self.max_num_seqs or num_batched_tokens >= self.max_num_batched_tokens:
+                return False
+            remaining_budget = self.max_num_batched_tokens - num_batched_tokens
+            chunk_len = min(seq.remaining_prompt_tokens, self.max_prefill_chunk_size, remaining_budget)
+            if chunk_len <= 0:
+                return False
+            prefill_seqs.append(seq)
+            prefill_chunk_lens.append(chunk_len)
+            scheduled_ids.add(seq.seq_id)
+            num_batched_tokens += chunk_len
+            return True
+
+        # phase-1: prefill only
+        for seq in list(self.running):
+            schedule_prefill(seq)
+        while self.waiting and len(scheduled_ids) < self.max_num_seqs and num_batched_tokens < self.max_num_batched_tokens:
+            seq = self.waiting[0]
+            if not self.block_manager.can_allocate(seq):
+                break
+            self.block_manager.allocate(seq)
+            seq.num_prefilled_tokens = max(seq.num_prefilled_tokens, seq.num_cached_tokens)
+            seq.status = SequenceStatus.RUNNING
+            self.waiting.popleft()
+            self.running.append(seq)
+            schedule_prefill(seq)
+        if prefill_seqs:
+            return decode_seqs, prefill_seqs, prefill_chunk_lens
+
+        # phase-2: decode only
+        for seq in list(self.running):
+            if len(scheduled_ids) >= self.max_num_seqs:
+                break
+            if not seq.is_prefill_finished:
+                continue
+            if not self.block_manager.can_append(seq):
+                self.preempt(seq)
+                continue
+            self.block_manager.may_append(seq)
+            decode_seqs.append(seq)
+            scheduled_ids.add(seq.seq_id)
+        assert decode_seqs
         return decode_seqs, prefill_seqs, prefill_chunk_lens
 
     def preempt(self, seq: Sequence):
