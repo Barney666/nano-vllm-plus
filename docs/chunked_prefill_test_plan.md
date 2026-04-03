@@ -173,32 +173,7 @@ python example.py
 
 再重新比较总耗时与 mixed ratio，找到你业务更合适的折中点。
 
-## 11. 不调参也能量化“是否有用”的基准测试
-
-直接运行：
-
-```bash
-python benchmark_chunked_effectiveness.py
-```
-
-> 脚本会自动以“两个子进程”分别运行 baseline 与 optimized，避免 PyTorch 分布式默认进程组重复初始化报错。
-
-该脚本固定两组配置（baseline-like 与 chunked+continuous），在同一组长短混合请求上输出：
-
-- `total_time`（总耗时）
-- `decode_throughput`（解码吞吐）
-- `ttft_p50 / ttft_p95`（首 token 延迟）
-- `finish_p95`（请求完成尾延迟）
-- `finish_short_mean / finish_long_mean`（短请求与长请求完成时间）
-- `mixed_ratio`（混合步占比）
-
-如果优化“有用”，常见表现是：
-
-- `mixed_ratio` 明显上升；
-- `ttft_p95`、`finish_short_mean` 或 `finish_p95` 至少有一项改善；
-- 即便总吞吐不升，也能看到公平性/尾延迟指标改善。
-
-## 12. 简历导向的“公平性”量化测试
+## 11. 简历导向的“公平性”量化测试
 
 如果你要突出“短请求不再被长请求饿死”，建议直接跑：
 
