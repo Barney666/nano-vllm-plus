@@ -44,6 +44,7 @@ class LLMEngine:
             prompt = self.tokenizer.encode(prompt)
         seq = Sequence(prompt, sampling_params)
         self.scheduler.add(seq)
+        return seq.seq_id
 
     def step(self):
         decode_seqs, prefill_seqs, prefill_chunk_lens = self.scheduler.schedule()
@@ -53,7 +54,8 @@ class LLMEngine:
         num_prefill_tokens = sum(prefill_chunk_lens)
         num_decode_tokens = len(decode_seqs)
         is_mixed_step = bool(decode_seqs and prefill_seqs)
-        return outputs, num_prefill_tokens, num_decode_tokens, is_mixed_step
+        decode_seq_ids = [seq.seq_id for seq in decode_seqs]
+        return outputs, num_prefill_tokens, num_decode_tokens, is_mixed_step, decode_seq_ids
 
     def is_finished(self):
         return self.scheduler.is_finished()
@@ -80,7 +82,7 @@ class LLMEngine:
         )
         while not self.is_finished():
             t = perf_counter()
-            output, num_prefill_tokens, num_decode_tokens, is_mixed_step = self.step()
+            output, num_prefill_tokens, num_decode_tokens, is_mixed_step, _ = self.step()
             self.last_generate_stats["num_steps"] += 1
             self.last_generate_stats["num_mixed_steps"] += int(is_mixed_step)
             self.last_generate_stats["prefill_tokens"] += num_prefill_tokens
