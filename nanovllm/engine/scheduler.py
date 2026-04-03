@@ -12,6 +12,7 @@ class Scheduler:
         self.max_num_batched_tokens = config.max_num_batched_tokens
         self.enable_chunked_prefill = config.enable_chunked_prefill
         self.chunked_prefill_size = config.chunked_prefill_size
+        self.schedule_decode_next = False
         self.eos = config.eos
         self.block_manager = BlockManager(config.num_kvcache_blocks, config.kvcache_block_size)
         self.waiting: deque[Sequence] = deque()
@@ -25,17 +26,23 @@ class Scheduler:
 
     def schedule_prefill(self) -> list[Sequence]:
         scheduled_seqs = []
+        scheduled_seq_ids = set()
         num_seqs = 0
         num_batched_tokens = 0
         while self.waiting and num_seqs < self.max_num_seqs:
             seq = self.waiting[0]
+            if seq.seq_id in scheduled_seq_ids:
+                break
+            allocated = False
             if not seq.block_table:
                 if not self.block_manager.can_allocate(seq):
                     break
                 self.block_manager.allocate(seq)
+                allocated = True
             num_remaining_prompt_tokens = seq.num_prompt_tokens - seq.num_cached_tokens
             if num_remaining_prompt_tokens <= 0:
                 self.waiting.popleft()
+                scheduled_seq_ids.add(seq.seq_id)
                 self.running.append(seq)
                 continue
             num_scheduled_prefill_tokens = num_remaining_prompt_tokens
@@ -49,10 +56,13 @@ class Scheduler:
                     num_budget_tokens,
                 )
             if num_scheduled_prefill_tokens <= 0 or num_batched_tokens + num_scheduled_prefill_tokens > self.max_num_batched_tokens:
+                if allocated:
+                    self.block_manager.deallocate(seq)
                 break
             num_seqs += 1
             num_batched_tokens += num_scheduled_prefill_tokens
             self.waiting.popleft()
+            scheduled_seq_ids.add(seq.seq_id)
             seq.status = SequenceStatus.RUNNING
             seq.scheduled_prefill_tokens = num_scheduled_prefill_tokens
             scheduled_seqs.append(seq)
@@ -63,12 +73,7 @@ class Scheduler:
                 self.running.append(seq)
         return scheduled_seqs
 
-    def schedule(self) -> tuple[list[Sequence], bool]:
-        scheduled_seqs = self.schedule_prefill()
-        if scheduled_seqs:
-            return scheduled_seqs, True
-
-        # decode
+    def schedule_decode(self) -> list[Sequence]:
         scheduled_seqs = []
         num_seqs = 0
         while self.running and num_seqs < self.max_num_seqs:
@@ -83,9 +88,34 @@ class Scheduler:
                 num_seqs += 1
                 self.block_manager.may_append(seq)
                 scheduled_seqs.append(seq)
-        assert scheduled_seqs
+        if not scheduled_seqs:
+            return []
         self.running.extendleft(reversed(scheduled_seqs))
-        return scheduled_seqs, False
+        return scheduled_seqs
+
+    def schedule(self) -> tuple[list[Sequence], bool]:
+        if self.enable_chunked_prefill and self.waiting and self.running:
+            if self.schedule_decode_next:
+                scheduled_seqs = self.schedule_decode()
+                if scheduled_seqs:
+                    self.schedule_decode_next = False
+                    return scheduled_seqs, False
+            scheduled_seqs = self.schedule_prefill()
+            if scheduled_seqs:
+                self.schedule_decode_next = True
+                return scheduled_seqs, True
+            scheduled_seqs = self.schedule_decode()
+            if scheduled_seqs:
+                self.schedule_decode_next = False
+                return scheduled_seqs, False
+        else:
+            scheduled_seqs = self.schedule_prefill()
+            if scheduled_seqs:
+                return scheduled_seqs, True
+            scheduled_seqs = self.schedule_decode()
+            if scheduled_seqs:
+                return scheduled_seqs, False
+        raise RuntimeError("scheduler has no runnable sequences")
 
     def preempt(self, seq: Sequence):
         seq.status = SequenceStatus.WAITING

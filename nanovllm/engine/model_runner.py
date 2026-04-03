@@ -92,8 +92,9 @@ class ModelRunner:
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
-        num_seqs = min(max_num_batched_tokens // max_model_len, self.config.max_num_seqs)
-        seqs = [Sequence([0] * max_model_len) for _ in range(num_seqs)]
+        warmup_seqlen = min(max_num_batched_tokens, max_model_len)
+        num_seqs = min(max(max_num_batched_tokens // warmup_seqlen, 1), self.config.max_num_seqs)
+        seqs = [Sequence([0] * warmup_seqlen) for _ in range(num_seqs)]
         self.run(seqs, True)
         torch.cuda.empty_cache()
 
@@ -194,6 +195,8 @@ class ModelRunner:
         else:
             bs = input_ids.size(0)
             context = get_context()
+            if context.block_tables.size(1) > self.graph_vars["block_tables"].size(1):
+                return self.model.compute_logits(self.model(input_ids, positions))
             graph = self.graphs[next(x for x in self.graph_bs if x >= bs)]
             graph_vars = self.graph_vars
             graph_vars["input_ids"][:bs] = input_ids
@@ -202,6 +205,7 @@ class ModelRunner:
             graph_vars["slot_mapping"][:bs] = context.slot_mapping
             graph_vars["context_lens"].zero_()
             graph_vars["context_lens"][:bs] = context.context_lens
+            graph_vars["block_tables"].fill_(-1)
             graph_vars["block_tables"][:bs, :context.block_tables.size(1)] = context.block_tables
             graph.replay()
             return self.model.compute_logits(graph_vars["outputs"][:bs])

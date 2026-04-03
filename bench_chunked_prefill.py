@@ -45,11 +45,13 @@ def run_case(
     enable_chunked_prefill: bool,
     chunked_prefill_size: int,
 ):
+    long_max_tokens = 128
+    short_max_tokens = 16
     llm = LLM(
         model_path,
         tensor_parallel_size=1,
         enforce_eager=False,
-        max_model_len=len(long_prompt),
+        max_model_len=len(long_prompt) + long_max_tokens,
         max_num_batched_tokens=len(long_prompt),
         enable_chunked_prefill=enable_chunked_prefill,
         chunked_prefill_size=chunked_prefill_size,
@@ -60,9 +62,9 @@ def run_case(
     torch.cuda.synchronize()
     torch.cuda.reset_peak_memory_stats()
 
-    long_seq = llm.add_request(long_prompt, SamplingParams(temperature=0.0, ignore_eos=True, max_tokens=128))
+    long_seq = llm.add_request(long_prompt, SamplingParams(temperature=0.0, ignore_eos=True, max_tokens=long_max_tokens))
     short_seqs = [
-        llm.add_request(prompt, SamplingParams(temperature=0.0, ignore_eos=True, max_tokens=16))
+        llm.add_request(prompt, SamplingParams(temperature=0.0, ignore_eos=True, max_tokens=short_max_tokens))
         for prompt in short_prompts
     ]
     seqs = [long_seq] + short_seqs

@@ -51,14 +51,16 @@ class LLMEngine:
 
     def step(self, return_metadata: bool = False):
         seqs, is_prefill = self.scheduler.schedule()
+        scheduled_prefill_tokens = [seq.scheduled_prefill_tokens for seq in seqs]
         token_ids = self.model_runner.call("run", seqs, is_prefill)
         self.scheduler.postprocess(seqs, token_ids, is_prefill)
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
-        num_tokens = sum(len(seq) for seq in seqs) if is_prefill else -len(seqs)
+        num_tokens = sum(scheduled_prefill_tokens) if is_prefill else -len(seqs)
         if return_metadata:
             metadata = {
                 "is_prefill": is_prefill,
                 "seq_ids": [seq.seq_id for seq in seqs],
+                "scheduled_prefill_tokens": scheduled_prefill_tokens,
             }
             return outputs, num_tokens, metadata
         return outputs, num_tokens
