@@ -68,7 +68,8 @@ python example.py
 ### 预期行为
 
 - 能正常初始化引擎并完成生成；
-- 进度条中 `Prefill` / `Decode` 两个吞吐字段持续刷新；
+- 进度条中 `Prefill` / `Decode` 两个吞吐字段持续刷新，并出现 `Mixed=x/y`；
+- 程序末尾打印 `Scheduling Stats`，其中 `Mixed steps (prefill+decode)` 大于 0（通常不是 0）；
 - 最终得到非空文本输出。
 
 ### 不符合预期行为

@@ -6,12 +6,16 @@ from transformers import AutoTokenizer
 def main():
     path = os.path.expanduser("~/huggingface/Qwen3-0.6B/")
     tokenizer = AutoTokenizer.from_pretrained(path)
-    llm = LLM(path, enforce_eager=True, tensor_parallel_size=1)
+    llm = LLM(path, enforce_eager=True, tensor_parallel_size=1, max_prefill_chunk_size=128)
 
     sampling_params = SamplingParams(temperature=0.6, top_p=0.9, max_tokens=256)
     prompts = [
-        "introduce yourself",
-        "list all prime numbers within 100",
+        "请用三句话介绍你自己。",
+        "列出100以内所有质数，并按逗号分隔。",
+        "请解释一下什么是chunked prefill，以及它为什么能降低长prompt场景下的延迟。",
+        "写一首关于并行计算和缓存复用的短诗。",
+        "给我一个Python函数，输入n返回斐波那契数列前n项。",
+        "请用通俗语言解释连续批处理（continuous batching）。",
     ]
     prompts = [
         tokenizer.apply_chat_template(
@@ -22,6 +26,16 @@ def main():
         for prompt in prompts
     ]
     outputs = llm.generate(prompts, sampling_params)
+    stats = llm.last_generate_stats
+
+    print("\n=== Scheduling Stats ===")
+    print(f"Total steps: {stats['num_steps']}")
+    print(f"Mixed steps (prefill+decode): {stats['num_mixed_steps']}")
+    if stats["num_steps"]:
+        ratio = stats["num_mixed_steps"] / stats["num_steps"]
+        print(f"Mixed ratio: {ratio:.2%}")
+    print(f"Prefill tokens scheduled: {stats['prefill_tokens']}")
+    print(f"Decode tokens scheduled: {stats['decode_tokens']}")
 
     for prompt, output in zip(prompts, outputs):
         print("\n")

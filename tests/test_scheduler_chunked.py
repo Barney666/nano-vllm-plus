@@ -148,3 +148,21 @@ def test_schedule_respects_token_budget_and_no_duplicate_seq_in_step():
     assert chunks == [3, 1]
     assert sum(chunks) <= 4
     assert len({seq.seq_id for seq in prefill + decode}) == len(prefill) + len(decode)
+
+
+def test_continuous_batching_has_mixed_steps_in_rollout():
+    scheduler = make_scheduler(max_num_batched_tokens=6, max_prefill_chunk_size=2)
+    for _ in range(4):
+        scheduler.add(Sequence([1, 2, 3, 4, 5, 6]))
+
+    mixed_steps = 0
+    # rollout with dummy decode tokens; we only validate scheduling shape here.
+    for _ in range(30):
+        if scheduler.is_finished():
+            break
+        decode, prefill, chunks = scheduler.schedule()
+        if decode and prefill:
+            mixed_steps += 1
+        scheduler.postprocess(prefill, chunks, decode, [0] * len(decode))
+
+    assert mixed_steps > 0

@@ -52,7 +52,8 @@ class LLMEngine:
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in decode_seqs if seq.is_finished]
         num_prefill_tokens = sum(prefill_chunk_lens)
         num_decode_tokens = len(decode_seqs)
-        return outputs, num_prefill_tokens, num_decode_tokens
+        is_mixed_step = bool(decode_seqs and prefill_seqs)
+        return outputs, num_prefill_tokens, num_decode_tokens, is_mixed_step
 
     def is_finished(self):
         return self.scheduler.is_finished()
@@ -71,9 +72,19 @@ class LLMEngine:
             self.add_request(prompt, sp)
         outputs = {}
         prefill_throughput = decode_throughput = 0.
+        self.last_generate_stats = dict(
+            num_steps=0,
+            num_mixed_steps=0,
+            prefill_tokens=0,
+            decode_tokens=0,
+        )
         while not self.is_finished():
             t = perf_counter()
-            output, num_prefill_tokens, num_decode_tokens = self.step()
+            output, num_prefill_tokens, num_decode_tokens, is_mixed_step = self.step()
+            self.last_generate_stats["num_steps"] += 1
+            self.last_generate_stats["num_mixed_steps"] += int(is_mixed_step)
+            self.last_generate_stats["prefill_tokens"] += num_prefill_tokens
+            self.last_generate_stats["decode_tokens"] += num_decode_tokens
             if use_tqdm:
                 dt = perf_counter() - t
                 if num_prefill_tokens > 0:
@@ -83,6 +94,7 @@ class LLMEngine:
                 pbar.set_postfix({
                     "Prefill": f"{int(prefill_throughput)}tok/s",
                     "Decode": f"{int(decode_throughput)}tok/s",
+                    "Mixed": f"{self.last_generate_stats['num_mixed_steps']}/{self.last_generate_stats['num_steps']}",
                 })
             for seq_id, token_ids in output:
                 outputs[seq_id] = token_ids
