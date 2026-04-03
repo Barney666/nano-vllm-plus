@@ -92,9 +92,10 @@ class ModelRunner:
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
-        num_seqs = min(max_num_batched_tokens // max_model_len, self.config.max_num_seqs)
-        seqs = [Sequence([0] * max_model_len) for _ in range(num_seqs)]
-        chunk_lens = [max_model_len] * num_seqs
+        warmup_len = min(max_model_len, max_num_batched_tokens)
+        num_seqs = max(1, min(max_num_batched_tokens // warmup_len, self.config.max_num_seqs))
+        seqs = [Sequence([0] * warmup_len) for _ in range(num_seqs)]
+        chunk_lens = [warmup_len] * num_seqs
         self.run_prefill_chunk(seqs, chunk_lens)
         torch.cuda.empty_cache()
 
