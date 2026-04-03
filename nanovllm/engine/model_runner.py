@@ -264,6 +264,11 @@ class ModelRunner:
         if self.rank == 0 and decode_seqs:
             temperatures, top_ps = self.prepare_sample(decode_seqs)
             decode_logits = logits[num_prefill_seqs:num_prefill_seqs + len(decode_seqs)]
+            if decode_logits.size(0) != len(decode_seqs):
+                raise RuntimeError(
+                    f"Mixed decode logit shape mismatch: got {decode_logits.size(0)} rows "
+                    f"for {len(decode_seqs)} decode sequences."
+                )
             token_ids = self.sampler(decode_logits, temperatures, top_ps).tolist()
         else:
             token_ids = [] if self.rank == 0 else None
