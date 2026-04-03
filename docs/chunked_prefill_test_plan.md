@@ -113,3 +113,20 @@ python example.py
 - 预算过小会让 prefill 拆得很碎，step 数增加，调度/launch 开销变大，吞吐可能下降；
 - 若远小于常见 prompt 长度，TTFT 可能上升（首 token 要等更多 prefill step）；
 - 预算配置不当时，吞吐与延迟会出现明显 trade-off（建议结合业务流量做压测）。
+
+## 8. `Mixed=x/y` 指标如何解读
+
+- `y`：当前已经执行的调度 step 总数（`num_steps`）。
+- `x`：其中“同时存在 prefill 与 decode”的 step 数（`num_mixed_steps`）。
+- 即：`Mixed=x/y` 表示“截至当前，混合 step 占比为 `x / y`”。
+
+在真实运行中，常见轨迹是：
+
+1. **开头 `0/1`**：第一步通常只有 prefill（还没有可 decode 的序列），所以混合步为 0。
+2. **中段 `x` 和 `y` 一起增长**：有的序列已进入 decode，而长序列仍在 prefill，出现 prefill+decode 并行混合。
+3. **后段 `x` 停住、`y` 继续涨**：prefill 已基本结束，只剩 decode 尾巴，因此后续 step 不再计入混合步。
+
+所以像 `0/1 -> 105/106 -> 105/386 -> 105/490` 这种模式是符合预期的，表示：
+
+- 早期进入了较长一段混合阶段；
+- 后期进入纯 decode 收尾阶段（`x` 不再增长）。
