@@ -48,6 +48,7 @@ def main():
         path,
         enforce_eager=True,
         tensor_parallel_size=1,
+        enable_continuous_batching=True,
         max_prefill_chunk_size=32,
         max_num_batched_tokens=128,
     )

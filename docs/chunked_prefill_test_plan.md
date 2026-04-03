@@ -180,6 +180,12 @@ python example.py
 python benchmark_chunked_fairness.py
 ```
 
+可选提高稳定性：
+
+```bash
+python benchmark_chunked_fairness.py --repeats 3
+```
+
 该脚本会模拟在线到达模式：先来长请求，再在多个 step 注入短请求，然后比较 baseline 与 chunked+continuous 的：
 
 - `short_ttft_p95`（短请求首 token 延迟）
@@ -187,3 +193,7 @@ python benchmark_chunked_fairness.py
 - `mixed_ratio`
 
 简历建议优先写这类指标，而不是只写总吞吐。
+
+补充说明：
+
+- 脚本内部会先做一次 warmup，再开始计时，减少首次编译/初始化噪声。
