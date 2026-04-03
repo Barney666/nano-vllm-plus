@@ -11,7 +11,7 @@ def main():
     path = os.path.expanduser("~/huggingface/Qwen3-0.6B/")
     tokenizer = AutoTokenizer.from_pretrained(path)
 
-    # 近似“未实现 chunked+continuous batching 前”的行为：
+    # 近似“未实现 chunked+continuous batching 前”的行为（注意：这是近似，不是完全回退）：
     # - chunk size 足够大，尽量一次性 prefill
     # - batched token budget 放宽，减少 prefill 被切块概率
     llm = LLM(
