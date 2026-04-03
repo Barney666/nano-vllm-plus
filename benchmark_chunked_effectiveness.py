@@ -84,6 +84,8 @@ def run_case(model_path: str, chunk_size: int, batched_tokens: int):
     total_time = perf_counter() - t0
 
     ttft_all = [first_decode_time[s] for s in seq_group]
+    ttft_short = [first_decode_time[s] for s, g in seq_group.items() if g == "short"]
+    ttft_long = [first_decode_time[s] for s, g in seq_group.items() if g == "long"]
     t_finish_all = [finish_time[s] for s in seq_group]
     t_finish_short = [finish_time[s] for s, g in seq_group.items() if g == "short"]
     t_finish_long = [finish_time[s] for s, g in seq_group.items() if g == "long"]
@@ -95,6 +97,8 @@ def run_case(model_path: str, chunk_size: int, batched_tokens: int):
         "decode_throughput": total_output_tokens / max(total_time, 1e-6),
         "ttft_p50": percentile(ttft_all, 0.5),
         "ttft_p95": percentile(ttft_all, 0.95),
+        "ttft_short_mean": mean(ttft_short),
+        "ttft_long_mean": mean(ttft_long),
         "finish_p95": percentile(t_finish_all, 0.95),
         "finish_short_mean": mean(t_finish_short),
         "finish_long_mean": mean(t_finish_long),
@@ -108,6 +112,7 @@ def print_result(name: str, r: dict):
     print(f"total_time={r['total_time']:.2f}s")
     print(f"decode_throughput={r['decode_throughput']:.2f} tok/s")
     print(f"ttft_p50={r['ttft_p50']:.2f}s, ttft_p95={r['ttft_p95']:.2f}s")
+    print(f"ttft_short_mean={r['ttft_short_mean']:.2f}s, ttft_long_mean={r['ttft_long_mean']:.2f}s")
     print(f"finish_p95={r['finish_p95']:.2f}s")
     print(f"finish_short_mean={r['finish_short_mean']:.2f}s, finish_long_mean={r['finish_long_mean']:.2f}s")
     print(f"mixed_ratio={r['mixed_ratio']:.2%}")
@@ -154,6 +159,7 @@ def main():
     print(f"Δtotal_time={optimized['total_time'] - baseline['total_time']:+.2f}s")
     print(f"Δdecode_throughput={optimized['decode_throughput'] - baseline['decode_throughput']:+.2f} tok/s")
     print(f"Δttft_p95={optimized['ttft_p95'] - baseline['ttft_p95']:+.2f}s")
+    print(f"Δttft_short_mean={optimized['ttft_short_mean'] - baseline['ttft_short_mean']:+.2f}s")
     print(f"Δfinish_p95={optimized['finish_p95'] - baseline['finish_p95']:+.2f}s")
     print(f"Δfinish_short_mean={optimized['finish_short_mean'] - baseline['finish_short_mean']:+.2f}s")
     print(f"Δmixed_ratio={optimized['mixed_ratio'] - baseline['mixed_ratio']:+.2%}")
