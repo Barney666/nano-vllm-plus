@@ -47,6 +47,10 @@ You can also enable nucleus sampling by setting `top_p`:
 sampling_params = SamplingParams(temperature=0.6, top_p=0.9, max_tokens=256)
 ```
 
+## Design Notes
+
+- [Chunked Prefill + Continuous Batching 设计与落地指南](docs/chunked_prefill_continuous_batching.md)
+
 ## Benchmark
 
 See `bench.py` for benchmark.
