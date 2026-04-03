@@ -97,3 +97,18 @@ python example.py
 - prefix cache 命中 + chunked prefill 的端到端正确性；
 - preempt/recompute 场景下长序列稳定性；
 - 大批量并发下吞吐与延迟回归基线。
+
+## 7. 参数含义与约束说明
+
+- `max_model_len`：单条序列允许的最大长度上限（prompt + completion），初始化时会再被模型的 `max_position_embeddings` 截断。
+- `max_num_batched_tokens`：**每个调度 step 的 query token 预算**（prefill chunk token + decode token 总和），不是单条请求长度上限。
+
+为什么现在不再强制 `max_num_batched_tokens >= max_model_len`：
+
+- 在 chunked prefill 下，长序列本来就是分多 step 推进；允许较小的 `max_num_batched_tokens` 可以更容易形成 prefill/decode 交叉，也利于显存受限场景。
+
+潜在隐患（需要认知）：
+
+- 预算过小会让 prefill 拆得很碎，step 数增加，调度/launch 开销变大，吞吐可能下降；
+- 若远小于常见 prompt 长度，TTFT 可能上升（首 token 要等更多 prefill step）；
+- 预算配置不当时，吞吐与延迟会出现明显 trade-off（建议结合业务流量做压测）。

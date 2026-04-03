@@ -6,9 +6,11 @@ from transformers import AutoConfig
 @dataclass
 class Config:
     model: str
+    # Per-step query token budget seen by the scheduler (prefill chunk tokens + decode tokens).
     max_num_batched_tokens: int = 16384
     max_num_seqs: int = 512
     max_prefill_chunk_size: int = 512
+    # Maximum sequence length allowed by the engine (capped by model position embeddings).
     max_model_len: int = 4096
     gpu_memory_utilization: float = 0.9
     tensor_parallel_size: int = 1
