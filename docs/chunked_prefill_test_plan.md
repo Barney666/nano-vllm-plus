@@ -130,3 +130,17 @@ python example.py
 
 - 早期进入了较长一段混合阶段；
 - 后期进入纯 decode 收尾阶段（`x` 不再增长）。
+
+## 9. 如何做“实现前后”速度对比
+
+仓库提供两个可直接运行的脚本，prompt 与 sampling 参数保持一致：
+
+- `python example.py`：chunked + continuous batching 配置（`max_prefill_chunk_size=32`, `max_num_batched_tokens=128`）
+- `python example_baseline_prefill_first.py`：近似 prefill-first 基线配置（`max_prefill_chunk_size=4096`, `max_num_batched_tokens=4096`）
+
+建议对比以下字段：
+
+- `Total inference time`
+- `Mixed ratio`
+- `Prefill tokens scheduled`
+- `Decode tokens scheduled`

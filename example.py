@@ -22,6 +22,25 @@ def build_long_context_prompt() -> str:
     return header + "\n\n" + "\n".join(sections)
 
 
+def build_demo_prompts(tokenizer: AutoTokenizer) -> list[str]:
+    prompts = [
+        build_long_context_prompt(),  # 用一个超长 prompt 制造持续 prefill 压力
+        "请用三句话介绍你自己。",
+        "列出100以内所有质数，并按逗号分隔。",
+        "写一首关于并行计算和缓存复用的短诗。",
+        "给我一个Python函数，输入n返回斐波那契数列前n项。",
+        "请用通俗语言解释连续批处理（continuous batching）。",
+    ]
+    return [
+        tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        for prompt in prompts
+    ]
+
+
 def main():
     path = os.path.expanduser("~/huggingface/Qwen3-0.6B/")
     tokenizer = AutoTokenizer.from_pretrained(path)
@@ -39,23 +58,7 @@ def main():
         max_tokens=384,
         ignore_eos=True,
     )
-    long_prompt = build_long_context_prompt()
-    prompts = [
-        long_prompt,  # 用一个超长 prompt 制造持续 prefill 压力
-        "请用三句话介绍你自己。",
-        "列出100以内所有质数，并按逗号分隔。",
-        "写一首关于并行计算和缓存复用的短诗。",
-        "给我一个Python函数，输入n返回斐波那契数列前n项。",
-        "请用通俗语言解释连续批处理（continuous batching）。",
-    ]
-    prompts = [
-        tokenizer.apply_chat_template(
-            [{"role": "user", "content": prompt}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-        for prompt in prompts
-    ]
+    prompts = build_demo_prompts(tokenizer)
     t0 = perf_counter()
     outputs = llm.generate(prompts, sampling_params)
     elapsed = perf_counter() - t0
