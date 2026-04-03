@@ -70,6 +70,7 @@ python example.py
 - 能正常初始化引擎并完成生成；
 - 进度条中 `Prefill` / `Decode` 两个吞吐字段持续刷新，并出现 `Mixed=x/y`；
 - 程序末尾打印 `Scheduling Stats`，其中 `Mixed steps (prefill+decode)` 大于 0（通常不是 0）；
+- 程序末尾打印 `Total inference time: ...s`，用于不同参数组合下的对比；
 - 最终得到非空文本输出。
 
 > 若 `Mixed steps` 为 0，通常不是功能错误，而是 workload 太短或 token budget 太宽松，导致 prefill 在很少 step 内一次跑完。可尝试：
