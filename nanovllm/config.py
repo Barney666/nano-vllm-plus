@@ -6,8 +6,11 @@ from transformers import AutoConfig
 @dataclass
 class Config:
     model: str
+    # Per-step query token budget seen by the scheduler (prefill chunk tokens + decode tokens).
     max_num_batched_tokens: int = 16384
     max_num_seqs: int = 512
+    max_prefill_chunk_size: int = 512
+    # Maximum sequence length allowed by the engine (capped by model position embeddings).
     max_model_len: int = 4096
     gpu_memory_utilization: float = 0.9
     tensor_parallel_size: int = 1
@@ -21,6 +24,7 @@ class Config:
         assert os.path.isdir(self.model)
         assert self.kvcache_block_size % 256 == 0
         assert 1 <= self.tensor_parallel_size <= 8
+        assert self.max_prefill_chunk_size > 0
+        assert self.max_num_batched_tokens > 0
         self.hf_config = AutoConfig.from_pretrained(self.model)
         self.max_model_len = min(self.max_model_len, self.hf_config.max_position_embeddings)
-        assert self.max_num_batched_tokens >= self.max_model_len
