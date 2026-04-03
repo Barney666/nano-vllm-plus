@@ -186,6 +186,12 @@ python benchmark_chunked_fairness.py
 python benchmark_chunked_fairness.py --repeats 3
 ```
 
+如果你担心温度/功耗导致后续轮次降频，可以加冷却间隔：
+
+```bash
+python benchmark_chunked_fairness.py --repeats 3 --cooldown-seconds 5
+```
+
 该脚本会模拟在线到达模式：先来长请求，再在多个 step 注入短请求，然后比较 baseline 与 chunked+continuous 的：
 
 - `short_ttft_p95`（短请求首 token 延迟）
@@ -197,3 +203,4 @@ python benchmark_chunked_fairness.py --repeats 3
 补充说明：
 
 - 脚本内部会先做一次 warmup，再开始计时，减少首次编译/初始化噪声。
+- 每个 case 都在独立子进程中运行，进程退出会释放 CUDA context，通常不需要手动清空缓存。

@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from statistics import mean
 from time import perf_counter
 
@@ -164,6 +165,7 @@ def main():
     parser.add_argument("--batched-tokens", type=int, default=128)
     parser.add_argument("--enable-continuous-batching", type=int, choices=[0, 1], default=1)
     parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument("--cooldown-seconds", type=float, default=0.0)
     args = parser.parse_args()
 
     if args.mode == "single":
@@ -176,22 +178,37 @@ def main():
         print(json.dumps(result, ensure_ascii=False))
         return
 
-    baseline_runs = [
-        run_single_case_in_subprocess(
-            args.model_path, chunk_size=4096, batched_tokens=4096, enable_continuous_batching=False
-        )
-        for _ in range(args.repeats)
-    ]
-    optimized_runs = [
-        run_single_case_in_subprocess(
-            args.model_path, chunk_size=32, batched_tokens=128, enable_continuous_batching=True
-        )
-        for _ in range(args.repeats)
-    ]
+    baseline_runs = []
+    optimized_runs = []
+    for i in range(args.repeats):
+        if i % 2 == 0:
+            baseline_runs.append(
+                run_single_case_in_subprocess(
+                    args.model_path, chunk_size=4096, batched_tokens=4096, enable_continuous_batching=False
+                )
+            )
+            optimized_runs.append(
+                run_single_case_in_subprocess(
+                    args.model_path, chunk_size=32, batched_tokens=128, enable_continuous_batching=True
+                )
+            )
+        else:
+            optimized_runs.append(
+                run_single_case_in_subprocess(
+                    args.model_path, chunk_size=32, batched_tokens=128, enable_continuous_batching=True
+                )
+            )
+            baseline_runs.append(
+                run_single_case_in_subprocess(
+                    args.model_path, chunk_size=4096, batched_tokens=4096, enable_continuous_batching=False
+                )
+            )
+        if args.cooldown_seconds > 0:
+            time.sleep(args.cooldown_seconds)
     baseline = aggregate_results(baseline_runs)
     optimized = aggregate_results(optimized_runs)
 
-    print(f"repeats={args.repeats}")
+    print(f"repeats={args.repeats}, cooldown_seconds={args.cooldown_seconds}")
     print_result("baseline_prefill_first_like", baseline)
     print_result("chunked_continuous", optimized)
 
