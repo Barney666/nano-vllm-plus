@@ -47,6 +47,20 @@ You can also enable nucleus sampling by setting `top_p`:
 sampling_params = SamplingParams(temperature=0.6, top_p=0.9, max_tokens=256)
 ```
 
+### Chunked Prefill
+
+Use `enable_chunked_prefill` to split long prompt prefill into smaller chunks, reducing head-of-line blocking in mixed long/short traffic:
+
+```python
+llm = LLM(
+    "/YOUR/MODEL/PATH",
+    enable_chunked_prefill=True,
+    chunked_prefill_size=2048,
+)
+```
+
+For an apples-to-apples comparison script (Full Prefill vs Chunked Prefill under `1 x 32K + 32 x short` mixed load), see `bench_chunked_prefill.py`.
+
 ## Benchmark
 
 See `bench.py` for benchmark.

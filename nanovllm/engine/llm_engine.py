@@ -44,13 +44,14 @@ class LLMEngine:
             prompt = self.tokenizer.encode(prompt)
         seq = Sequence(prompt, sampling_params)
         self.scheduler.add(seq)
+        return seq.seq_id
 
     def step(self):
-        seqs, is_prefill = self.scheduler.schedule()
-        token_ids = self.model_runner.call("run", seqs, is_prefill)
-        self.scheduler.postprocess(seqs, token_ids)
+        seqs, is_prefill, sample_flags = self.scheduler.schedule()
+        num_tokens = sum(getattr(seq, "scheduled_prefill_tokens", len(seq)) for seq in seqs) if is_prefill else -len(seqs)
+        token_ids = self.model_runner.call("run", seqs, is_prefill, sample_flags)
+        self.scheduler.postprocess(seqs, token_ids, is_prefill, sample_flags)
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
-        num_tokens = sum(len(seq) for seq in seqs) if is_prefill else -len(seqs)
         return outputs, num_tokens
 
     def is_finished(self):

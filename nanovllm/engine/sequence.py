@@ -73,11 +73,19 @@ class Sequence:
         self.num_tokens += 1
 
     def __getstate__(self):
-        return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.block_table,
-                self.token_ids if self.num_completion_tokens == 0 else self.last_token)
+        return (
+            self.num_tokens,
+            self.num_prompt_tokens,
+            self.num_cached_tokens,
+            self.block_table,
+            getattr(self, "scheduled_prefill_tokens", None),
+            self.token_ids if self.num_completion_tokens == 0 else self.last_token,
+        )
 
     def __setstate__(self, state):
-        self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.block_table = state[:-1]
+        self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.block_table, scheduled_prefill_tokens = state[:-1]
+        if scheduled_prefill_tokens is not None:
+            self.scheduled_prefill_tokens = scheduled_prefill_tokens
         if self.num_completion_tokens == 0:
             self.token_ids = state[-1]
         else:
