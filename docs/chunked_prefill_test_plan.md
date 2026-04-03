@@ -181,6 +181,8 @@ python example.py
 python benchmark_chunked_effectiveness.py
 ```
 
+> 脚本会自动以“两个子进程”分别运行 baseline 与 optimized，避免 PyTorch 分布式默认进程组重复初始化报错。
+
 该脚本固定两组配置（baseline-like 与 chunked+continuous），在同一组长短混合请求上输出：
 
 - `total_time`（总耗时）

@@ -1,4 +1,8 @@
+import argparse
+import json
 import os
+import subprocess
+import sys
 from statistics import mean
 from time import perf_counter
 
@@ -109,13 +113,39 @@ def print_result(name: str, r: dict):
     print(f"mixed_ratio={r['mixed_ratio']:.2%}")
 
 
-def main():
-    path = os.path.expanduser("~/huggingface/Qwen3-0.6B/")
+def run_single_case_in_subprocess(model_path: str, chunk_size: int, batched_tokens: int) -> dict:
+    cmd = [
+        sys.executable,
+        __file__,
+        "--mode",
+        "single",
+        "--model-path",
+        model_path,
+        "--chunk-size",
+        str(chunk_size),
+        "--batched-tokens",
+        str(batched_tokens),
+    ]
+    p = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    lines = [line.strip() for line in p.stdout.splitlines() if line.strip()]
+    return json.loads(lines[-1])
 
-    # baseline-like: 大 chunk + 大预算，趋向 prefill-first
-    baseline = run_case(path, chunk_size=4096, batched_tokens=4096)
-    # optimized-like: 小 chunk + 受控预算，更强调混合和公平性
-    optimized = run_case(path, chunk_size=32, batched_tokens=128)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=["compare", "single"], default="compare")
+    parser.add_argument("--model-path", default=os.path.expanduser("~/huggingface/Qwen3-0.6B/"))
+    parser.add_argument("--chunk-size", type=int, default=32)
+    parser.add_argument("--batched-tokens", type=int, default=128)
+    args = parser.parse_args()
+
+    if args.mode == "single":
+        result = run_case(args.model_path, chunk_size=args.chunk_size, batched_tokens=args.batched_tokens)
+        print(json.dumps(result, ensure_ascii=False))
+        return
+
+    baseline = run_single_case_in_subprocess(args.model_path, chunk_size=4096, batched_tokens=4096)
+    optimized = run_single_case_in_subprocess(args.model_path, chunk_size=32, batched_tokens=128)
 
     print_result("baseline_prefill_first_like", baseline)
     print_result("chunked_continuous", optimized)
