@@ -72,6 +72,12 @@ python example.py
 - 程序末尾打印 `Scheduling Stats`，其中 `Mixed steps (prefill+decode)` 大于 0（通常不是 0）；
 - 最终得到非空文本输出。
 
+> 若 `Mixed steps` 为 0，通常不是功能错误，而是 workload 太短或 token budget 太宽松，导致 prefill 在很少 step 内一次跑完。可尝试：
+>
+> - 降低 `max_num_batched_tokens`（如 128）
+> - 降低 `max_prefill_chunk_size`（如 32）
+> - 增加一个超长 prompt 与多个短 prompt 混合输入
+
 ### 不符合预期行为
 
 - CUDA / NCCL 初始化失败；
