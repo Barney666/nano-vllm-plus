@@ -10,6 +10,8 @@ class Scheduler:
     def __init__(self, config: Config):
         self.max_num_seqs = config.max_num_seqs
         self.max_num_batched_tokens = config.max_num_batched_tokens
+        self.enable_chunked_prefill = config.enable_chunked_prefill
+        self.chunked_prefill_size = config.chunked_prefill_size
         self.eos = config.eos
         self.block_manager = BlockManager(config.num_kvcache_blocks, config.kvcache_block_size)
         self.waiting: deque[Sequence] = deque()
@@ -21,26 +23,54 @@ class Scheduler:
     def add(self, seq: Sequence):
         self.waiting.append(seq)
 
-    def schedule(self) -> tuple[list[Sequence], bool]:
-        # prefill
+    def schedule_prefill(self) -> list[Sequence]:
         scheduled_seqs = []
         num_seqs = 0
         num_batched_tokens = 0
         while self.waiting and num_seqs < self.max_num_seqs:
             seq = self.waiting[0]
-            if num_batched_tokens + len(seq) > self.max_num_batched_tokens or not self.block_manager.can_allocate(seq):
+            if not seq.block_table:
+                if not self.block_manager.can_allocate(seq):
+                    break
+                self.block_manager.allocate(seq)
+            num_remaining_prompt_tokens = seq.num_prompt_tokens - seq.num_cached_tokens
+            if num_remaining_prompt_tokens <= 0:
+                self.waiting.popleft()
+                self.running.append(seq)
+                continue
+            num_scheduled_prefill_tokens = num_remaining_prompt_tokens
+            if self.enable_chunked_prefill:
+                num_budget_tokens = self.max_num_batched_tokens - num_batched_tokens
+                if num_budget_tokens <= 0:
+                    break
+                num_scheduled_prefill_tokens = min(
+                    num_scheduled_prefill_tokens,
+                    self.chunked_prefill_size,
+                    num_budget_tokens,
+                )
+            if num_scheduled_prefill_tokens <= 0 or num_batched_tokens + num_scheduled_prefill_tokens > self.max_num_batched_tokens:
                 break
             num_seqs += 1
-            self.block_manager.allocate(seq)
-            num_batched_tokens += len(seq) - seq.num_cached_tokens
-            seq.status = SequenceStatus.RUNNING
+            num_batched_tokens += num_scheduled_prefill_tokens
             self.waiting.popleft()
-            self.running.append(seq)
+            seq.status = SequenceStatus.RUNNING
+            seq.scheduled_prefill_tokens = num_scheduled_prefill_tokens
             scheduled_seqs.append(seq)
+            if seq.num_cached_tokens + num_scheduled_prefill_tokens < seq.num_prompt_tokens:
+                seq.status = SequenceStatus.WAITING
+                self.waiting.append(seq)
+            else:
+                self.running.append(seq)
+        return scheduled_seqs
+
+    def schedule(self) -> tuple[list[Sequence], bool]:
+        scheduled_seqs = self.schedule_prefill()
         if scheduled_seqs:
             return scheduled_seqs, True
 
         # decode
+        scheduled_seqs = []
+        num_seqs = 0
         while self.running and num_seqs < self.max_num_seqs:
             seq = self.running.popleft()
             while not self.block_manager.can_append(seq):
@@ -62,8 +92,14 @@ class Scheduler:
         self.block_manager.deallocate(seq)
         self.waiting.appendleft(seq)
 
-    def postprocess(self, seqs: list[Sequence], token_ids: list[int]) -> list[bool]:
+    def postprocess(self, seqs: list[Sequence], token_ids: list[int], is_prefill: bool) -> list[bool]:
         for seq, token_id in zip(seqs, token_ids):
+            if is_prefill and seq.scheduled_prefill_tokens > 0:
+                seq.num_cached_tokens += seq.scheduled_prefill_tokens
+                seq.scheduled_prefill_tokens = 0
+                if seq.num_cached_tokens < seq.num_prompt_tokens:
+                    seq.status = SequenceStatus.WAITING
+                    continue
             seq.append_token(token_id)
             if (not seq.ignore_eos and token_id == self.eos) or seq.num_completion_tokens == seq.max_tokens:
                 seq.status = SequenceStatus.FINISHED
